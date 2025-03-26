@@ -1,0 +1,12 @@
+.mainb{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid whitesmoke;
+    background-color: whitesmoke;
+    height: 500px;
+    width: 350px;
+    border-radius: 25px;
+    flex-direction: column;
+    gap: 10px;
+}

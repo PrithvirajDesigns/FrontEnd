@@ -1,0 +1,176 @@
+/* Add these styles to your home.module.css file */
+
+.main {
+    display: flex;
+    height: 100vh;
+    background-color: #f8f8f8;
+  }
+  
+  .Sb {
+    width: 250px;
+    height: 100%;
+    /* background-color: #222; */
+    color: #fff;
+    /* box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1); */
+  }
+  
+  .Nb {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .MCon {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  
+  /* Dashboard Styles */
+  .dashboardContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  
+  .statsSection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  
+  .statCard {
+    display: flex;
+    align-items: center;
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease;
+  }
+  
+  .statCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  }
+  
+  .statIcon {
+    font-size: 24px;
+    margin-right: 16px;
+    opacity: 0.8;
+  }
+  
+  .statInfo {
+    flex: 1;
+  }
+  
+  .statTitle {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 4px 0;
+    font-weight: 500;
+  }
+  
+  .statValue {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+  }
+  
+  .chartsSection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+  }
+  
+  .activityCard, .progressCard {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+  
+  .cardTitle {
+    font-size: 18px;
+    color: #333;
+    margin: 0 0 20px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    font-weight: 500;
+  }
+  
+  .activityList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .activityItem {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  
+  .activityUser {
+    font-weight: 500;
+    color: #333;
+    margin: 0;
+    width: 30%;
+  }
+  
+  .activityAction {
+    color: #666;
+    margin: 0;
+    flex: 1;
+  }
+  
+  .activityTime {
+    color: #999;
+    font-size: 12px;
+    margin: 0;
+    text-align: right;
+    width: 20%;
+  }
+  
+  .progressList {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .progressItem {
+    margin-bottom: 4px;
+  }
+  
+  .progressInfo {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  
+  .progressTask {
+    color: #333;
+    font-weight: 500;
+    margin: 0;
+  }
+  
+  .progressPercent {
+    color: #666;
+    margin: 0;
+  }
+  
+  .progressBarWrapper {
+    height: 6px;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  
+  .progressBar {
+    height: 100%;
+    background-color: #555;
+    border-radius: 3px;
+  }
