@@ -8,6 +8,7 @@ import Pomodoro from '../User/Pages/Pomodoro/pomodoro'
 import Home from '../User/Pages/Home/home'
 import Report from '../User/Pages/Report/report'
 import Settings from '../User/Pages/Settings/settings'
+import Hero from '../User/Pages/Hero/hero'
 
 const UserRouter = () => {
   return (
@@ -19,6 +20,7 @@ const UserRouter = () => {
           <Route path='/task' element={<Task/>} />
           <Route path='/pomodoro' element={<Pomodoro/>} />
           <Route path='/settings' element={<Settings/>} />
+          <Route path='/home' element={<Hero/>} />
           
       </Routes>
     </div>
