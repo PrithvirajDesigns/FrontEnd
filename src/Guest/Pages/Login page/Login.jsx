@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Button, 
@@ -17,25 +17,44 @@ import {
 } from '@mui/icons-material';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please fill in all fields');
       setOpenSnackbar(true);
+      setIsSuccess(false);
       return;
     }
-    // Add your login logic here
+
+    // Simulate successful login
+    // Replace this with your actual login logic
     console.log('Login attempted with:', { email, password });
+    
+    // For demo purposes, we'll consider it successful
+    setError('Login successful! Redirecting...');
+    setOpenSnackbar(true);
+    setIsSuccess(true);
   };
 
-  const handleCloseSnackbar = () => {
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    
     setOpenSnackbar(false);
+    
+    // Navigate after snackbar closes if login was successful
+    if (isSuccess) {
+      navigate('/user/home'); // Change to your desired route
+    }
   };
 
   return (
@@ -87,12 +106,9 @@ const Login = () => {
           <Link 
             to="/register" 
             style={{ 
-              textDecoration: 'line', 
+              textDecoration: 'none', 
               color: '#424242',
-              fontWeight: 500,
-              '&:hover': {
-                color: '#212121'
-              }
+              fontWeight: 500
             }}
           >
             Register here
@@ -199,15 +215,15 @@ const Login = () => {
 
       <Snackbar
         open={openSnackbar}
-        autoHideDuration={6000}
+        autoHideDuration={3000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
         <Alert 
           onClose={handleCloseSnackbar} 
-          severity="error"
+          severity={isSuccess ? 'success' : 'error'}
           sx={{
-            bgcolor: '#424242',
+            bgcolor: isSuccess ? '#4caf50' : '#424242',
             color: '#fff',
             '& .MuiAlert-icon': {
               color: '#fff'
