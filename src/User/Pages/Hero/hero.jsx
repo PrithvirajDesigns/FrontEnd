@@ -7,14 +7,8 @@ const Hero = () => {
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      height: "100vh",
     }}>
-      <img
-        src={image}
-        alt="Loving Doodle"
-        width="500"
-        height="400"
-      />
+      
     </div>
   );
 };

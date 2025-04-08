@@ -11,11 +11,12 @@ import {
   TextField,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { CalendarToday } from "@mui/icons-material";
+import { CalendarToday, Delete } from "@mui/icons-material";
 import moment from "moment";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { motion } from "framer-motion";
+import supabase from "../../../utils/supabase"; // Adjust path as needed
 
 const theme = createTheme({
   palette: {
@@ -40,6 +41,9 @@ const Diary = () => {
   const [date, setDate] = useState(moment());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hasEntry, setHasEntry] = useState(false);
+  const [title, setTitle] = useState("");
+
+  const userId = sessionStorage.getItem("uid"); // UUID from login
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -51,35 +55,99 @@ const Diary = () => {
     },
   });
 
-  const loadEntry = useCallback(() => {
-    try {
-      const entries = JSON.parse(localStorage.getItem("diaryEntries") || "{}");
-      const entry = entries[date.format("YYYY-MM-DD")] || "";
-      if (editor) {
-        editor.commands.setContent(entry);
-        setHasEntry(!!entry);
-      }
-    } catch (error) {
-      console.error("Error loading diary entry:", error);
-      localStorage.removeItem("diaryEntries");
-    }
-  }, [date, editor]);
+  // SELECT - Load diary entry for the selected date
+  const loadEntry = useCallback(async () => {
+    if (!editor || !userId) return;
 
-  const handleSave = useCallback(() => {
-    if (!editor) return;
     try {
-      const entries = JSON.parse(localStorage.getItem("diaryEntries") || "{}");
-      const entryContent = editor.getHTML();
-      if (entryContent.trim() !== "<p></p>") {
-        entries[date.format("YYYY-MM-DD")] = entryContent;
-        localStorage.setItem("diaryEntries", JSON.stringify(entries));
-        setHasEntry(true);
-      }
+      const { data, error } = await supabase
+        .from("tbl_digitaldiary")
+        .select("diary_head, dairy_content")
+        .eq("user_id", userId)
+        .eq("diary_date", date.format("YYYY-MM-DD"))
+        .single();
+
+      if (error && error.code !== "PGRST116") throw error; // PGRST116 means no entry found
+
+      const entry = data || { diary_head: "", dairy_content: "" };
+      setTitle(entry.diary_head || "");
+      editor.commands.setContent(entry.dairy_content || "");
+      setHasEntry(!!entry.dairy_content);
     } catch (error) {
-      console.error("Error saving diary entry:", error);
-      alert("Failed to save diary entry. Please try again.");
+      console.error("Error loading diary entry:", error.message);
     }
-  }, [date, editor]);
+  }, [date, editor, userId]);
+
+  // INSERT/UPDATE - Save or update diary entry
+  const handleSave = useCallback(async () => {
+    if (!editor || !userId) return;
+
+    const content = editor.getHTML();
+    if (content.trim() === "<p></p>" && !title) return; // Don’t save empty entries
+
+    try {
+      const { data: existingEntry, error: fetchError } = await supabase
+        .from("tbl_digitaldiary")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("diary_date", date.format("YYYY-MM-DD"))
+        .single();
+
+      if (fetchError && fetchError.code !== "PGRST116") throw fetchError;
+
+      if (existingEntry) {
+        // UPDATE existing entry
+        const { error: updateError } = await supabase
+          .from("tbl_digitaldiary")
+          .update({
+            diary_head: title,
+            dairy_content: content,
+          })
+          .eq("id", existingEntry.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // INSERT new entry
+        const { error: insertError } = await supabase.from("tbl_digitaldiary").insert({
+          user_id: userId,
+          diary_date: date.format("YYYY-MM-DD"),
+          diary_head: title,
+          dairy_content: content,
+        });
+
+        if (insertError) throw insertError;
+      }
+
+      setHasEntry(true);
+      alert("Diary entry saved successfully!");
+    } catch (error) {
+      console.error("Error saving diary entry:", error.message);
+      alert("Failed to save diary entry: " + error.message);
+    }
+  }, [date, editor, userId, title]);
+
+  // DELETE - Delete diary entry
+  const handleDelete = async () => {
+    if (!userId) return;
+
+    try {
+      const { error } = await supabase
+        .from("tbl_digitaldiary")
+        .delete()
+        .eq("user_id", userId)
+        .eq("diary_date", date.format("YYYY-MM-DD"));
+
+      if (error) throw error;
+
+      setTitle("");
+      editor?.commands.setContent("");
+      setHasEntry(false);
+      alert("Diary entry deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting diary entry:", error.message);
+      alert("Failed to delete diary entry: " + error.message);
+    }
+  };
 
   const handleDateChange = (e) => {
     const newDate = moment(e.target.value);
@@ -208,6 +276,8 @@ const Diary = () => {
               fullWidth
               variant="standard"
               placeholder="Entry Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               InputProps={{
                 disableUnderline: true,
                 sx: {
@@ -249,11 +319,20 @@ const Diary = () => {
             </Box>
           </Paper>
 
-          <Box display="flex" justifyContent="flex-end">
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
+          <Box display="flex" justifyContent="flex-end" gap={2}>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleDelete}
+                startIcon={<Delete />}
+                sx={{ px: 4, py: 1.5 }}
+                disabled={!hasEntry}
+              >
+                Delete
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 variant="contained"
                 onClick={handleSave}
@@ -274,7 +353,7 @@ const Diary = () => {
         }
         .ProseMirror p {
           margin: 0 0 1rem 0;
-          line-height: 1.6;
+          lineHeight: 1.6;
         }
         .ProseMirror:focus {
           outline: none;

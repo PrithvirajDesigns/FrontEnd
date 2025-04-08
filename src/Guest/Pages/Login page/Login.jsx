@@ -1,114 +1,166 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Box, 
-  Button, 
-  Divider, 
-  TextField, 
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Box,
+  Button,
+  Divider,
+  TextField,
   Typography,
   Snackbar,
   Alert,
   IconButton,
-  InputAdornment
-} from '@mui/material';
-import { 
-  Visibility, 
-  VisibilityOff 
-} from '@mui/icons-material';
+  InputAdornment,
+} from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import supabase from "../../../utils/supabase"; // Adjust path as needed
 
 const Login = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [openSnackbar, setOpenSnackbar] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!email || !password) {
-      setError('Please fill in all fields');
-      setOpenSnackbar(true);
-      setIsSuccess(false);
+      setSnackbar({
+        open: true,
+        message: "Please fill in all fields",
+        severity: "error",
+      });
       return;
     }
 
-    // Simulate successful login
-    // Replace this with your actual login logic
-    console.log('Login attempted with:', { email, password });
-    
-    // For demo purposes, we'll consider it successful
-    setError('Login successful! Redirecting...');
-    setOpenSnackbar(true);
-    setIsSuccess(true);
+    try {
+      // Authenticate with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) throw new Error(authError.message);
+
+      // Check if the user is an admin
+      const { data: adminData, error: adminError } = await supabase
+        .from("tbl_admin")
+        .select("id")
+        .eq("admin_email", email)
+        .single();
+
+      if (adminError && adminError.code !== "PGRST116") {
+        // PGRST116 means no rows returned, which is fine (not an admin)
+        throw new Error("Error checking admin status: " + adminError.message);
+      }
+
+      if (adminData) {
+        // User is an admin
+        sessionStorage.setItem("aid", adminData.id);
+        setSnackbar({
+          open: true,
+          message: "Admin login successful! Redirecting...",
+          severity: "success",
+        });
+      } else {
+        // User is a regular user
+        const { data: userData, error: userError } = await supabase
+          .from("tbl_user")
+          .select("user_id")
+          .eq("user_email", email)
+          .single();
+
+        if (userError) throw new Error("Error fetching user data: " + userError.message);
+
+        sessionStorage.setItem("uid", userData.user_id);
+        setSnackbar({
+          open: true,
+          message: "Login successful! Redirecting...",
+          severity: "success",
+        });
+      }
+
+      // Reset form
+      setEmail("");
+      setPassword("");
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message,
+        severity: "error",
+      });
+    }
   };
 
   const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') {
-      return;
-    }
-    
-    setOpenSnackbar(false);
-    
+    if (reason === "clickaway") return;
+
+    const wasSuccess = snackbar.severity === "success";
+    setSnackbar((prev) => ({ ...prev, open: false }));
+
     // Navigate after snackbar closes if login was successful
-    if (isSuccess) {
-      navigate('/user/home'); // Change to your desired route
+    if (wasSuccess) {
+      const isAdmin = sessionStorage.getItem("aid") !== null;
+      navigate(isAdmin ? "/admin" : "/user/home");
     }
   };
 
   return (
     <Box
       sx={{
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: '#f8f8f8',
-        p: 2
+        display: "flex",
+        minHeight: "100vh",
+        alignItems: "center",
+        justifyContent: "center",
+        bgcolor: "#f8f8f8",
+        p: 2,
       }}
     >
       <Box
         sx={{
           maxWidth: 450,
-          width: '100%',
-          bgcolor: 'background.paper',
-          boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+          width: "100%",
+          bgcolor: "background.paper",
+          boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)",
           borderRadius: 10,
           p: 4,
-          border: '1px solid #e0e0e0'
+          border: "1px solid #e0e0e0",
         }}
       >
-        <Typography 
-          variant="h5" 
-          component="h1" 
-          align="center" 
-          sx={{ 
+        <Typography
+          variant="h5"
+          component="h1"
+          align="center"
+          sx={{
             fontWeight: 600,
             fontSize: 30,
             mb: 2,
-            color: 'text.primary',
-            letterSpacing: 0.5
+            color: "text.primary",
+            letterSpacing: 0.5,
           }}
         >
           Welcome Back
         </Typography>
-        
-        <Typography 
-          variant="body2" 
-          align="center" 
-          sx={{ 
+
+        <Typography
+          variant="body2"
+          align="center"
+          sx={{
             mb: 3,
-            color: 'text.secondary'
+            color: "text.secondary",
           }}
         >
-          Don't have an account?{' '}
-          <Link 
-            to="/register" 
-            style={{ 
-              textDecoration: 'none', 
-              color: '#424242',
-              fontWeight: 500
+          Don’t have an account?{" "}
+          <Link
+            to="/register"
+            style={{
+              textDecoration: "none",
+              color: "#424242",
+              fontWeight: 500,
             }}
           >
             Register here
@@ -125,19 +177,19 @@ const Login = () => {
             size="small"
             sx={{
               mb: 2,
-              '& .MuiOutlinedInput-root': {
+              "& .MuiOutlinedInput-root": {
                 borderRadius: 4,
-                '& fieldset': {
-                  borderColor: '#e0e0e0'
-                }
-              }
+                "& fieldset": {
+                  borderColor: "#e0e0e0",
+                },
+              },
             }}
-          />  
-          
+          />
+
           <TextField
             fullWidth
             label="Password"
-            type={showPassword ? 'text' : 'password'}
+            type={showPassword ? "text" : "password"}
             variant="outlined"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -149,24 +201,24 @@ const Login = () => {
                     onClick={() => setShowPassword(!showPassword)}
                     edge="end"
                     size="small"
-                    sx={{ color: '#757575' }}
+                    sx={{ color: "#757575" }}
                   >
                     {showPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
-              )
+              ),
             }}
             sx={{
-              '& .MuiOutlinedInput-root': {
+              "& .MuiOutlinedInput-root": {
                 borderRadius: 4,
-                '& fieldset': {
-                  borderColor: '#e0e0e0'
-                }
-              }
+                "& fieldset": {
+                  borderColor: "#e0e0e0",
+                },
+              },
             }}
           />
 
-          <Divider sx={{ my: 3, borderColor: '#eeeeee' }} />
+          <Divider sx={{ my: 3, borderColor: "#eeeeee" }} />
 
           <Button
             fullWidth
@@ -176,61 +228,38 @@ const Login = () => {
             sx={{
               py: 1,
               borderRadius: 4,
-              bgcolor: '#424242',
-              color: '#fff',
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              '&:hover': {
-                bgcolor: '#212121'
-              }
+              bgcolor: "#424242",
+              color: "#fff",
+              textTransform: "none",
+              fontSize: "0.875rem",
+              "&:hover": {
+                bgcolor: "#212121",
+              },
             }}
           >
             Sign In
-          </Button>
-
-          <Button
-            fullWidth
-            component={Link}
-            to="/register"
-            variant="outlined"
-            size="medium"
-            sx={{
-              mt: 2,
-              py: 1,
-              borderRadius: 4,
-              borderColor: '#e0e0e0',
-              color: '#424242',
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              '&:hover': {
-                borderColor: '#bdbdbd',
-                bgcolor: 'rgba(0, 0, 0, 0.02)'
-              }
-            }}
-          >
-            Create New Account
           </Button>
         </Box>
       </Box>
 
       <Snackbar
-        open={openSnackbar}
+        open={snackbar.open}
         autoHideDuration={3000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
       >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={isSuccess ? 'success' : 'error'}
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
           sx={{
-            bgcolor: isSuccess ? '#4caf50' : '#424242',
-            color: '#fff',
-            '& .MuiAlert-icon': {
-              color: '#fff'
-            }
+            bgcolor: snackbar.severity === "success" ? "#4caf50" : "#424242",
+            color: "#fff",
+            "& .MuiAlert-icon": {
+              color: "#fff",
+            },
           }}
         >
-          {error}
+          {snackbar.message}
         </Alert>
       </Snackbar>
     </Box>
