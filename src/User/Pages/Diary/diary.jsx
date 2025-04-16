@@ -15,6 +15,7 @@ import { CalendarToday, Delete } from "@mui/icons-material";
 import moment from "moment";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
 import { motion } from "framer-motion";
 import supabase from "../../../utils/supabase"; // Adjust path as needed
 
@@ -46,7 +47,13 @@ const Diary = () => {
   const userId = sessionStorage.getItem("uid"); // UUID from login
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder: "Write your thoughts here",
+        emptyEditorClass: "is-editor-empty",
+      }),
+    ],
     content: "",
     editorProps: {
       attributes: {
@@ -83,7 +90,7 @@ const Diary = () => {
     if (!editor || !userId) return;
 
     const content = editor.getHTML();
-    if (content.trim() === "<p></p>" && !title) return; // Don’t save empty entries
+    if (content.trim() === "<p></p>" && !title) return; // Don't save empty entries
 
     try {
       const { data: existingEntry, error: fetchError } = await supabase
@@ -108,12 +115,14 @@ const Diary = () => {
         if (updateError) throw updateError;
       } else {
         // INSERT new entry
-        const { error: insertError } = await supabase.from("tbl_digitaldiary").insert({
-          user_id: userId,
-          diary_date: date.format("YYYY-MM-DD"),
-          diary_head: title,
-          dairy_content: content,
-        });
+        const { error: insertError } = await supabase
+          .from("tbl_digitaldiary")
+          .insert({
+            user_id: userId,
+            diary_date: date.format("YYYY-MM-DD"),
+            diary_head: title,
+            dairy_content: content,
+          });
 
         if (insertError) throw insertError;
       }
@@ -275,7 +284,7 @@ const Diary = () => {
             <TextField
               fullWidth
               variant="standard"
-              placeholder="Entry Title"
+              placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               InputProps={{
@@ -357,6 +366,13 @@ const Diary = () => {
         }
         .ProseMirror:focus {
           outline: none;
+        }
+        .is-editor-empty:first-child::before {
+          content: attr(data-placeholder);
+          float: left;
+          color:rgb(131, 131, 131);
+          pointer-events: none;
+          height: 0;
         }
       `}</style>
     </ThemeProvider>

@@ -12,9 +12,20 @@ import {
   ListItemText,
   LinearProgress,
   Chip,
+  IconButton,
+  InputAdornment,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search as SearchIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
 import supabase from "../../../utils/supabase"; // Adjust path as needed
 
 const theme = createTheme({
@@ -67,6 +78,11 @@ const Bookt = () => {
   const [pagesRead, setPagesRead] = useState("");
   const [allBooks, setAllBooks] = useState([]);
   const [trackedBooks, setTrackedBooks] = useState([]);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
   // Get user ID from sessionStorage (uid for users)
   const userId = sessionStorage.getItem("uid");
@@ -75,6 +91,14 @@ const Bookt = () => {
     fetchAllBooks();
     fetchTrackedBooks();
   }, []);
+
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   // SELECT - Fetch all books from tbl_book
   const fetchAllBooks = async () => {
@@ -94,6 +118,7 @@ const Bookt = () => {
       );
     } catch (error) {
       console.error("Error fetching all books:", error.message);
+      showSnackbar("Failed to fetch books", "error");
     }
   };
 
@@ -133,6 +158,7 @@ const Bookt = () => {
       setTrackedBooks(combinedBooks);
     } catch (error) {
       console.error("Error fetching tracked books:", error.message);
+      showSnackbar("Failed to fetch tracked books", "error");
     }
   };
 
@@ -149,23 +175,25 @@ const Bookt = () => {
       if (fetchError && fetchError.code !== "PGRST116") throw fetchError;
 
       if (!existingData) {
-        const { error: insertError } = await supabase.from("tbl_booktracker").insert({
-          book_id: book.id,
-          user_id: userId, // UUID string
-          booktracker_details: "0", // Start with 0 pages read
-          booktracker_date: new Date().toISOString(),
-        });
+        const { error: insertError } = await supabase
+          .from("tbl_booktracker")
+          .insert({
+            book_id: book.id,
+            user_id: userId,
+            booktracker_details: "0",
+            booktracker_date: new Date().toISOString(),
+          });
 
         if (insertError) throw insertError;
 
-        alert(`${book.title} added to your tracker!`);
-        fetchTrackedBooks(); // Refresh tracked books
+        showSnackbar(`${book.title} added to your tracker!`);
+        fetchTrackedBooks();
       } else {
-        alert("This book is already in your tracker.");
+        showSnackbar("This book is already in your tracker.", "info");
       }
     } catch (error) {
       console.error("Error adding to tracker:", error.message);
-      alert("Failed to add book to tracker: " + error.message);
+      showSnackbar("Failed to add book to tracker", "error");
     }
   };
 
@@ -176,7 +204,7 @@ const Bookt = () => {
     try {
       const pages = parseInt(pagesRead);
       if (pages < 0 || pages > selectedBook.totalPages) {
-        alert("Pages read must be between 0 and total pages");
+        showSnackbar("Pages read must be between 0 and total pages", "warning");
         return;
       }
 
@@ -190,7 +218,6 @@ const Bookt = () => {
       if (fetchError && fetchError.code !== "PGRST116") throw fetchError;
 
       if (existingData) {
-        // UPDATE existing record
         const { error: updateError } = await supabase
           .from("tbl_booktracker")
           .update({
@@ -201,24 +228,27 @@ const Bookt = () => {
 
         if (updateError) throw updateError;
       } else {
-        // INSERT new record (shouldn't happen here, but included for safety)
-        const { error: insertError } = await supabase.from("tbl_booktracker").insert({
-          book_id: selectedBook.id,
-          user_id: userId,
-          booktracker_details: pages.toString(),
-          booktracker_date: new Date().toISOString(),
-        });
+        const { error: insertError } = await supabase
+          .from("tbl_booktracker")
+          .insert({
+            book_id: selectedBook.id,
+            user_id: userId,
+            booktracker_details: pages.toString(),
+            booktracker_date: new Date().toISOString(),
+          });
 
         if (insertError) throw insertError;
       }
 
-      alert(`Updated ${selectedBook.title}: Read ${pages}/${selectedBook.totalPages} pages`);
-      fetchTrackedBooks(); // Refresh tracked books
+      showSnackbar(
+        `Updated ${selectedBook.title}: Read ${pages}/${selectedBook.totalPages} pages`
+      );
+      fetchTrackedBooks();
       setPagesRead("");
       setSelectedBook(null);
     } catch (error) {
       console.error("Error updating progress:", error.message);
-      alert("Failed to update progress: " + error.message);
+      showSnackbar("Failed to update progress", "error");
     }
   };
 
@@ -233,15 +263,15 @@ const Bookt = () => {
 
       if (error) throw error;
 
-      alert("Progress deleted successfully!");
-      fetchTrackedBooks(); // Refresh tracked books
+      showSnackbar("Progress deleted successfully!");
+      fetchTrackedBooks();
       if (selectedBook && selectedBook.id === bookId) {
         setSelectedBook(null);
         setPagesRead("");
       }
     } catch (error) {
       console.error("Error deleting progress:", error.message);
-      alert("Failed to delete progress: " + error.message);
+      showSnackbar("Failed to delete progress", "error");
     }
   };
 
@@ -272,6 +302,13 @@ const Bookt = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               sx={{ mb: 3 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
             />
 
             {/* All Books List */}
@@ -288,14 +325,17 @@ const Bookt = () => {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                   >
-                    <ListItemText primary={book.title} secondary={`${book.totalPages} pages`} />
-                    <Button
-                      size="small"
-                      variant="outlined"
+                    <ListItemText
+                      primary={book.title}
+                      secondary={`${book.totalPages} pages`}
+                    />
+                    <IconButton
+                      color="primary"
                       onClick={() => handleAddToTracker(book)}
+                      aria-label="add to tracker"
                     >
-                      Add to Tracker
-                    </Button>
+                      <AddIcon />
+                    </IconButton>
                   </ListItem>
                 ))}
               </List>
@@ -323,34 +363,44 @@ const Bookt = () => {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                   >
-                    <Box width="100%" display="flex" justifyContent="space-between">
+                    <Box
+                      width="100%"
+                      display="flex"
+                      justifyContent="space-between"
+                    >
                       <ListItemText
                         primary={book.title}
                         secondary={`${book.readPages}/${book.totalPages} pages`}
                       />
-                      <Box display="flex" gap={1}>
+                      <Box display="flex" gap={1} alignItems="center">
                         <Chip
                           label={`${Math.round(progress)}%`}
                           color="primary"
                           variant="outlined"
                           size="small"
                         />
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={() => handleDeleteProgress(book.id)}
-                        >
-                          Delete
-                        </Button>
-                        <Button
+                        <IconButton
                           size="small"
                           onClick={() => {
                             setSelectedBook(book);
                             setPagesRead(book.readPages.toString());
                           }}
+                          aria-label="edit"
                         >
-                          Update
-                        </Button>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteProgress(book.id)}
+                          aria-label="delete"
+                        >
+                          <DeleteIcon
+                            fontSize="small"
+                            color="inherit"
+                            sx={{ color: "black" }}
+                          />
+                        </IconButton>
                       </Box>
                     </Box>
                     <LinearProgress
@@ -389,7 +439,9 @@ const Bookt = () => {
                       }}
                       sx={{ width: "120px" }}
                     />
-                    <Typography variant="body1">/ {selectedBook.totalPages} pages</Typography>
+                    <Typography variant="body1">
+                      / {selectedBook.totalPages} pages
+                    </Typography>
                     <Box flexGrow={1} />
                     <Button
                       variant="contained"
@@ -404,7 +456,9 @@ const Bookt = () => {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(selectedBook.readPages / selectedBook.totalPages) * 100}
+                    value={
+                      (selectedBook.readPages / selectedBook.totalPages) * 100
+                    }
                     sx={{ width: "100%", mt: 2 }}
                   />
                 </Paper>
@@ -413,6 +467,22 @@ const Bookt = () => {
           </AnimatePresence>
         </Container>
       </motion.div>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </ThemeProvider>
   );
 };
