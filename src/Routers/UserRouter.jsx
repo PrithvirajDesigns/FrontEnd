@@ -20,7 +20,7 @@ const UserRouter = () => {
           <Route path='/task' element={<Task/>} />
           <Route path='/pomodoro' element={<Pomodoro/>} />
           <Route path='/settings' element={<Settings/>} />
-          <Route path='/home' element={<Hero/>} />
+          <Route path='/' element={<Hero/>} />
           
       </Routes>
     </div>

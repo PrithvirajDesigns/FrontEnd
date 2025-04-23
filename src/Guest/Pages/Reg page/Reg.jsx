@@ -13,13 +13,15 @@ import {
   Alert,
   Card,
   CardContent,
+  CircularProgress,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
-import supabase from "../../../utils/supabase"; // Adjust path as needed
+import supabase from "../../../utils/supabase";
 
 const Register = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     userName: "",
     email: "",
@@ -49,16 +51,33 @@ const Register = () => {
     }
   };
 
+  const checkEmailExists = async (email) => {
+    try {
+      const { data, error } = await supabase
+        .from("tbl_user")
+        .select("user_email")
+        .eq("user_email", email)
+        .single();
+
+      return data !== null;
+    } catch (error) {
+      console.error("Error checking email:", error);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
 
-    // Validation
+    // Basic validation
     if (!formData.userName || !formData.email || !formData.password) {
       setSnackbar({
         open: true,
         message: "Please fill in all required fields",
         severity: "error",
       });
+      setLoading(false);
       return;
     }
 
@@ -68,6 +87,7 @@ const Register = () => {
         message: "Please enter a valid email address",
         severity: "error",
       });
+      setLoading(false);
       return;
     }
 
@@ -77,11 +97,24 @@ const Register = () => {
         message: "Password must be at least 6 characters",
         severity: "error",
       });
+      setLoading(false);
       return;
     }
 
     try {
-      // Register user with Supabase Auth
+      // Check if email exists
+      const emailExists = await checkEmailExists(formData.email);
+      if (emailExists) {
+        setSnackbar({
+          open: true,
+          message: "An account with this email already exists",
+          severity: "error",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Register with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -89,33 +122,32 @@ const Register = () => {
 
       if (authError) throw new Error(authError.message);
 
+      // Handle photo upload if exists
       let photoUrl = null;
       if (formData.photo) {
-        // Upload photo to Supabase storage
         const filePath = `user_photos/${authData.user.id}/${Date.now()}_${formData.photo.name}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("planahead") // Adjust bucket name as needed
+        const { error: uploadError } = await supabase.storage
+          .from("planahead")
           .upload(filePath, formData.photo);
 
         if (uploadError) throw new Error("Photo upload failed: " + uploadError.message);
 
-        // Get public URL for the photo
         const { data: urlData } = supabase.storage.from("planahead").getPublicUrl(filePath);
         photoUrl = urlData.publicUrl;
       }
 
-      // Insert additional user data into users table
+      // Insert user data into custom table
       const { error: insertError } = await supabase.from("tbl_user").insert({
         user_id: authData.user.id,
         user_name: formData.userName,
         user_email: formData.email,
-        user_password: formData.password, // Note: Not recommended in production
+        user_password: formData.password,
         user_photo: photoUrl,
       });
 
       if (insertError) throw new Error("User data insert failed: " + insertError.message);
 
-      // Store user_id in sessionStorage
+      // Store user ID in session
       sessionStorage.setItem("uid", authData.user.id);
 
       // Show success message
@@ -138,6 +170,8 @@ const Register = () => {
         message: error.message,
         severity: "error",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -146,9 +180,12 @@ const Register = () => {
 
     setSnackbar((prev) => ({ ...prev, open: false }));
 
-    // Navigate to /user after snackbar closes if registration was successful
+    // Navigate after successful registration
     if (snackbar.severity === "success") {
-      navigate("/user");
+      setLoading(true);
+      setTimeout(() => {
+        navigate("/user/");
+      }, 500);
     }
   };
 
@@ -161,8 +198,34 @@ const Register = () => {
         justifyContent: "center",
         bgcolor: "#f8f8f8",
         p: 2,
+        position: "relative",
       }}
     >
+      {/* Loading Overlay */}
+      {loading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <CircularProgress 
+            size={60} 
+            thickness={5}
+            sx={{ color: "#fff" }}
+          />
+        </Box>
+      )}
+
+      {/* Registration Form */}
       <Box
         sx={{
           maxWidth: 450,
@@ -172,6 +235,7 @@ const Register = () => {
           borderRadius: 10,
           p: 4,
           border: "1px solid #e0e0e0",
+          opacity: loading ? 0.7 : 1,
         }}
       >
         <Typography
@@ -324,6 +388,7 @@ const Register = () => {
             type="submit"
             variant="contained"
             size="medium"
+            disabled={loading}
             sx={{
               mt: 1,
               py: 1,
@@ -335,9 +400,16 @@ const Register = () => {
               "&:hover": {
                 bgcolor: "#212121",
               },
+              "&:disabled": {
+                bgcolor: "#bdbdbd",
+              },
             }}
           >
-            Register
+            {loading ? (
+              <CircularProgress size={24} sx={{ color: "#fff" }} />
+            ) : (
+              "Register"
+            )}
           </Button>
 
           <Button
@@ -346,6 +418,7 @@ const Register = () => {
             to="/login"
             variant="outlined"
             size="medium"
+            disabled={loading}
             sx={{
               mt: 2,
               py: 1,
@@ -358,6 +431,10 @@ const Register = () => {
                 borderColor: "#bdbdbd",
                 bgcolor: "rgba(0, 0, 0, 0.02)",
               },
+              "&:disabled": {
+                borderColor: "#e0e0e0",
+                color: "#bdbdbd",
+              },
             }}
           >
             Have an Account? Sign In
@@ -365,6 +442,7 @@ const Register = () => {
         </Box>
       </Box>
 
+      {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}

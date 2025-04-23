@@ -1,6 +1,6 @@
 import React from "react";
 import Style from "./sidebar.module.css";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   IconButton,
   List,
@@ -14,14 +14,16 @@ import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import HistoryEduRoundedIcon from "@mui/icons-material/HistoryEduRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
-import FlagCircleIcon from '@mui/icons-material/FlagCircle';
-import TimerIcon from '@mui/icons-material/Timer';
-import TaskIcon from '@mui/icons-material/Task';
+import FlagCircleIcon from "@mui/icons-material/FlagCircle";
+import TimerIcon from "@mui/icons-material/Timer";
+import TaskIcon from "@mui/icons-material/Task";
 const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const handleLogout = () => {
     // Add your logout logic here
-    console.log("User logged out");
+    sessionStorage.removeItem("uid");
+    navigate("/");
   };
 
   return (
@@ -29,7 +31,7 @@ const Sidebar = () => {
       <Box className={Style.sidebarBox}>
         <List className={Style.sbmain}>
           <Link
-            to={"/user/home"}
+            to={"/user/"}
             className={`${Style.linktext} ${
               location.pathname === "/user/home" ? Style.active : ""
             }`}
@@ -142,9 +144,14 @@ const Sidebar = () => {
           </Link>
 
           {/* Logout Section */}
-          <Box className={Style.logoutContainer}>
-            <IconButton onClick={handleLogout} className={Style.logoutButton}>
-              <Typography sx={{fontSize: 18, fontWeight:600}} className={Style.logoutLabel}>Logout</Typography>
+          <Box className={Style.logoutContainer} onClick={handleLogout}>
+            <IconButton className={Style.logoutButton}>
+              <Typography
+                sx={{ fontSize: 18, fontWeight: 600 }}
+                className={Style.logoutLabel}
+              >
+                Logout
+              </Typography>
               <LogoutRoundedIcon sx={{ fontSize: 32 }} />
             </IconButton>
           </Box>

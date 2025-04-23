@@ -6,6 +6,9 @@ import Box from "@mui/material/Box";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
+import EventRepeatOutlinedIcon from '@mui/icons-material/EventRepeatOutlined';
+import PriorityHighOutlinedIcon from '@mui/icons-material/PriorityHighOutlined';
+
 const Sidebar = () => {
   return (
     <div>
@@ -78,6 +81,48 @@ const Sidebar = () => {
               </Typography>
               <ListItemIcon>
                 <MenuBookRoundedIcon
+                  sx={{ color: "rgb(47, 73, 104)", width: 40, height: 40 }}
+                />
+              </ListItemIcon>
+            </ListItem>
+          </Link>
+
+          <Link to={"/admin/priority"} className={Style.linktext}>
+            <ListItem
+              className={Style.ListItem}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                flexDirection: "column-reverse",
+              }}
+            >
+              <Typography variant="body1" sx={{ color: "rgb(47, 73, 104)" }}>
+                Priority
+              </Typography>
+              <ListItemIcon>
+                <PriorityHighOutlinedIcon
+                  sx={{ color: "rgb(47, 73, 104)", width: 40, height: 40 }}
+                />
+              </ListItemIcon>
+            </ListItem>
+          </Link>
+
+          <Link to={"/admin/Repeating"} className={Style.linktext}>
+            <ListItem
+              className={Style.ListItem}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                flexDirection: "column-reverse",
+              }}
+            >
+              <Typography variant="body1" sx={{ color: "rgb(47, 73, 104)" }}>
+                Recurring Task
+              </Typography>
+              <ListItemIcon>
+                <EventRepeatOutlinedIcon
                   sx={{ color: "rgb(47, 73, 104)", width: 40, height: 40 }}
                 />
               </ListItemIcon>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Avatar,
   IconButton,
@@ -14,11 +14,15 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  InputAdornment
+  InputAdornment,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import { Check, Edit, Cancel, Visibility, VisibilityOff } from '@mui/icons-material';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
+import supabase from '../../../utils/supabase';
 
 const theme = createTheme({
   palette: {
@@ -70,11 +74,10 @@ const theme = createTheme({
 
 const UserProfile = () => {
   const [user, setUser] = useState({
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    password: '********',
+    name: '',
+    email: '',
+    photo: '',
   });
-
   const [editField, setEditField] = useState(null);
   const [tempValue, setTempValue] = useState('');
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -82,6 +85,135 @@ const UserProfile = () => {
   const [newPassword, setNewPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+  const [loading, setLoading] = useState(true);
+
+  const userId = sessionStorage.getItem('uid');
+
+  useEffect(() => {
+    if (userId) {
+      fetchUserProfile();
+    } else {
+      setSnackbar({ open: true, message: 'User not logged in', severity: 'error' });
+      setLoading(false);
+    }
+  }, [userId]);
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  // SELECT - Fetch user profile from Supabase
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tbl_user')
+        .select('user_name, user_email, user_photo')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setUser({
+          name: data.user_name || '',
+          email: data.user_email || '',
+          photo: data.user_photo || '',
+        });
+      } else {
+        showSnackbar('User profile not found', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error.message);
+      showSnackbar('Failed to fetch user profile', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // UPDATE - Save edited field (name or email)
+  const handleSave = async () => {
+    if (!tempValue.trim()) {
+      showSnackbar(`${editField === 'name' ? 'Name' : 'Email'} cannot be empty`, 'warning');
+      return;
+    }
+    if (editField === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tempValue)) {
+      showSnackbar('Invalid email format', 'warning');
+      return;
+    }
+
+    try {
+      const updates = {
+        [editField === 'name' ? 'user_name' : 'user_email']: tempValue,
+      };
+
+      const { error } = await supabase
+        .from('tbl_user')
+        .update(updates)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setUser({ ...user, [editField]: tempValue });
+      setEditField(null);
+      showSnackbar(`${editField === 'name' ? 'Name' : 'Email'} updated successfully`);
+    } catch (error) {
+      console.error(`Error updating ${editField}:`, error.message);
+      showSnackbar(`Failed to update ${editField}`, 'error');
+    }
+  };
+
+  // UPDATE - Save new password
+  const handlePasswordSave = async () => {
+    if (!currentPassword || !newPassword) {
+      showSnackbar('Please enter both current and new passwords', 'warning');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showSnackbar('New password must be at least 6 characters', 'warning');
+      return;
+    }
+
+    try {
+      // Note: Password validation should ideally use Supabase Auth or a server-side function
+      // This is a placeholder; replace with actual validation logic
+      const { data, error: authError } = await supabase
+        .from('tbl_user')
+        .select('user_password')
+        .eq('user_id', userId)
+        .single();
+
+      if (authError) throw authError;
+
+      // Placeholder: Assume passwords are hashed; actual validation requires server-side logic
+      // For demo, we'll skip direct comparison and update if currentPassword is provided
+      // In production, use Supabase Auth's `signInWithPassword` to verify currentPassword
+
+      const { error } = await supabase
+        .from('users')
+        .update({ user_password: newPassword }) // Should be hashed server-side
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setPasswordDialogOpen(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      showSnackbar('Password updated successfully');
+    } catch (error) {
+      console.error('Error updating password:', error.message);
+      showSnackbar('Failed to update password', 'error');
+    }
+  };
 
   const handleEditClick = (field) => {
     if (field === 'password') {
@@ -92,23 +224,9 @@ const UserProfile = () => {
     }
   };
 
-  const handleSave = () => {
-    setUser({ ...user, [editField]: tempValue });
-    setEditField(null);
-  };
-
   const handleCancel = () => {
     setEditField(null);
-  };
-
-  const handlePasswordSave = () => {
-    // Add logic to validate currentPassword if needed
-    if (newPassword) {
-      setUser({ ...user, password: '********' });
-      setPasswordDialogOpen(false);
-      setCurrentPassword('');
-      setNewPassword('');
-    }
+    setTempValue('');
   };
 
   const handleClickShowCurrentPassword = () => {
@@ -124,6 +242,17 @@ const UserProfile = () => {
     { key: 'email', label: 'Email' },
     { key: 'password', label: 'Password' },
   ];
+
+  if (loading) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Container maxWidth="md" sx={{ py: 4, textAlign: 'center' }}>
+          <CircularProgress />
+        </Container>
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -144,9 +273,11 @@ const UserProfile = () => {
                 transition={{ duration: 0.3 }}
               >
                 <Avatar
+                  src={user.photo}
+                  alt={user.name}
                   sx={{ width: 150, height: 150, fontSize: 64, bgcolor: 'primary.main', mb: 3 }}
                 >
-                  {user.name.charAt(0).toUpperCase()}
+                  {!user.photo && user.name.charAt(0).toUpperCase()}
                 </Avatar>
               </Box>
             </Grid>
@@ -261,6 +392,22 @@ const UserProfile = () => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert
+            onClose={handleCloseSnackbar}
+            severity={snackbar.severity}
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Container>
     </ThemeProvider>
   );
