@@ -29,6 +29,7 @@ import {
   Select,
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
@@ -40,7 +41,7 @@ import {
   CalendarToday as CalendarIcon,
   GroupAdd as GroupAddIcon,
 } from "@mui/icons-material";
-import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
+import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { motion, AnimatePresence } from "framer-motion";
@@ -130,6 +131,7 @@ const MinimalTaskPage = () => {
   const [searchEmail, setSearchEmail] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [openNotificationsModal, setOpenNotificationsModal] = useState(false);
+  const [openCollaboratorsViewModal, setOpenCollaboratorsViewModal] = useState(false);
   const [priorities, setPriorities] = useState([]);
   const [recurs, setRecurs] = useState([]);
   const [users, setUsers] = useState([]);
@@ -137,6 +139,7 @@ const MinimalTaskPage = () => {
 
   const userId = sessionStorage.getItem("uid");
   const debouncedSearchEmail = useDebounce(searchEmail, 300);
+  const MAX_COLLABORATORS = 5;
 
   useEffect(() => {
     if (!userId) {
@@ -186,7 +189,6 @@ const MinimalTaskPage = () => {
         .from("tbl_priority")
         .select("id, priority_name, priority_color");
       if (prioritiesError) throw prioritiesError;
-      console.log("prioritiesData:", prioritiesData);
       setPriorities(prioritiesData || []);
 
       // Fetch recurrence options
@@ -194,7 +196,6 @@ const MinimalTaskPage = () => {
         .from("tbl_recur")
         .select("id, recur_name");
       if (recursError) throw recursError;
-      console.log("recursData:", recursData);
       setRecurs(recursData || []);
 
       // Fetch users (for collaborators)
@@ -203,7 +204,6 @@ const MinimalTaskPage = () => {
         .select("user_id, user_name")
         .neq("user_id", userId);
       if (usersError) throw usersError;
-      console.log("usersData:", usersData);
       setUsers(usersData || []);
 
       // Fetch tasks: owned by user
@@ -251,10 +251,8 @@ const MinimalTaskPage = () => {
         },
         []
       );
-      console.log("tasksData:", tasksData);
 
       const mappedTasks = tasksData.map((task) => {
-        // Combine task_duedate and task_time into dueDateTime
         let dueDateTime = null;
         if (task.task_duedate && task.task_time) {
           const dateTimeString = `${task.task_duedate} ${task.task_time}`;
@@ -262,12 +260,22 @@ const MinimalTaskPage = () => {
             dueDateTime = dateTimeString;
           }
         }
+        // Determine if the current user has completed the task
+        const userCollab = task.tbl_task_collaborators.find(
+          (c) => c.user_id === userId
+        );
+        const userCompleted = userCollab?.status === "Completed";
+        // Count completed collaborators
+        const completedCollaborators = task.tbl_task_collaborators.filter(
+          (c) => c.status === "Completed"
+        ).length;
         return {
           id: task.id,
           title: task.task_title,
           content: task.task_content || "",
           dueDateTime,
-          completed: task.task_status === "completed",
+          userCompleted, // Current user's completion status
+          completedCollaborators, // Count of completed collaborators
           priorityId: task.priority_id,
           recurId: task.recur_id,
           priority: task.tbl_priority || null,
@@ -275,7 +283,6 @@ const MinimalTaskPage = () => {
           collaborators: task.tbl_task_collaborators || [],
         };
       });
-      console.log("mappedTasks:", mappedTasks);
       setTasks(mappedTasks);
 
       // Fetch notifications
@@ -286,7 +293,6 @@ const MinimalTaskPage = () => {
           .eq("user_id", userId)
           .order("created_at", { ascending: false });
       if (notificationsError) throw notificationsError;
-      console.log("notificationsData:", notificationsData);
       setNotifications(notificationsData || []);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -319,6 +325,13 @@ const MinimalTaskPage = () => {
 
       if (error) throw error;
 
+      // Automatically add the task owner as a collaborator
+      await supabase.from("tbl_task_collaborators").insert({
+        task_id: data.id,
+        user_id: userId,
+        status: "Accepted",
+      });
+
       setNewTaskTitle("");
       showSnackbar("Task added successfully");
       fetchData();
@@ -328,32 +341,46 @@ const MinimalTaskPage = () => {
     }
   };
 
-  const toggleComplete = async (id) => {
+  const toggleComplete = async (taskId) => {
     if (!userId) {
       showSnackbar("User not logged in", "error");
       return;
     }
 
     try {
-      const task = tasks.find((t) => t.id === id);
-      const newStatus = task.completed ? "pending" : "completed";
+      const task = tasks.find((t) => t.id === taskId);
+      const userCollab = task.collaborators.find((c) => c.user_id === userId);
+      if (!userCollab && task.user_id !== userId) {
+        showSnackbar("You are not a collaborator on this task", "error");
+        return;
+      }
 
+      const newStatus = task.userCompleted ? "Accepted" : "Completed";
+
+      // Update the collaborator's status
       const { error } = await supabase
-        .from("tbl_task")
-        .update({ task_status: newStatus })
-        .eq("id", id)
+        .from("tbl_task_collaborators")
+        .update({ status: newStatus })
+        .eq("task_id", taskId)
         .eq("user_id", userId);
 
       if (error) throw error;
 
-      setTasks(
-        tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+      // Update task status if all collaborators are completed
+      const allCollaborators = task.collaborators;
+      const allCompleted = allCollaborators.every(
+        (c) => c.status === "Completed" || (c.user_id === userId && newStatus === "Completed")
       );
-      showSnackbar(`Task marked as ${newStatus}`);
+      await supabase
+        .from("tbl_task")
+        .update({ task_status: allCompleted ? "completed" : "pending" })
+        .eq("id", taskId);
+
+      showSnackbar(`Task marked as ${newStatus.toLowerCase()}`);
       fetchData();
     } catch (error) {
-      console.error("Error toggling task completion:", error.message);
-      showSnackbar("Failed to update task", "error");
+      console.error("Error toggling completion:", error.message);
+      showSnackbar("Failed to update completion status", "error");
     }
   };
 
@@ -478,6 +505,11 @@ const MinimalTaskPage = () => {
 
     if (collaborators.length === 0) {
       showSnackbar("Please select at least one collaborator", "warning");
+      return;
+    }
+
+    if (collaborators.length > MAX_COLLABORATORS) {
+      showSnackbar(`Cannot add more than ${MAX_COLLABORATORS} collaborators`, "warning");
       return;
     }
 
@@ -657,6 +689,15 @@ const MinimalTaskPage = () => {
     handleMenuClose();
   };
 
+  const handleOpenCollaboratorsViewModal = () => {
+    if (!currentTask) {
+      showSnackbar("No task selected", "error");
+      return;
+    }
+    setOpenCollaboratorsViewModal(true);
+    handleMenuClose();
+  };
+
   const handleOpenNotificationsModal = () => {
     setOpenNotificationsModal(true);
     fetchData();
@@ -664,6 +705,10 @@ const MinimalTaskPage = () => {
 
   const handleAddCollaborator = (user_id) => {
     if (user_id && !collaborators.includes(user_id) && user_id !== userId) {
+      if (collaborators.length >= MAX_COLLABORATORS) {
+        showSnackbar(`Maximum ${MAX_COLLABORATORS} collaborators allowed`, "warning");
+        return;
+      }
       setCollaborators([...collaborators, user_id]);
       setSearchEmail("");
       setSearchResults([]);
@@ -749,233 +794,229 @@ const MinimalTaskPage = () => {
             </Paper>
 
             {/* Task List */}
-            {/* Task List */}
             <Paper elevation={2} sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Your Tasks
               </Typography>
               <List>
                 <AnimatePresence>
-                  {tasks.map((task) => {
-                    // Count completed collaborators
-                    const completedCollaborators =
-                      task.collaborators?.filter(
-                        (c) => c.status === "Completed"
-                      ) || [];
-
-                    return (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <ListItem
-                          sx={{
-                            borderRadius: "12px",
-                            mb: 1,
+                  {tasks.map((task) => (
+                    <motion.div
+                      key={task.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <ListItem
+                        sx={{
+                          borderRadius: "12px",
+                          mb: 1,
+                          backgroundColor:
+                            task.completedCollaborators > 0
+                              ? "rgba(76, 175, 80, 0.08)"
+                              : "inherit",
+                          "&:hover": {
                             backgroundColor:
-                              completedCollaborators.length > 0
-                                ? "rgba(76, 175, 80, 0.08)"
-                                : "inherit",
-                            "&:hover": {
-                              backgroundColor:
-                                completedCollaborators.length > 0
-                                  ? "rgba(76, 175, 80, 0.12)"
-                                  : "rgba(0, 0, 0, 0.04)",
-                            },
-                          }}
-                          component={motion.div}
-                          whileHover={{ scale: 1.01 }}
-                          secondaryAction={
-                            <IconButton
-                              edge="end"
-                              aria-label="options"
-                              onClick={(e) => handleMenuOpen(e, task)}
-                            >
-                              <MoreVertIcon />
-                            </IconButton>
+                              task.completedCollaborators > 0
+                                ? "rgba(76, 175, 80, 0.12)"
+                                : "rgba(0, 0, 0, 0.04)",
+                          },
+                        }}
+                        component={motion.div}
+                        whileHover={{ scale: 1.01 }}
+                        secondaryAction={
+                          <IconButton
+                            edge="end"
+                            aria-label="options"
+                            onClick={(e) => handleMenuOpen(e, task)}
+                          >
+                            <MoreVertIcon />
+                          </IconButton>
+                        }
+                      >
+                        <Checkbox
+                          checked={task.userCompleted}
+                          onChange={() => toggleComplete(task.id)}
+                          icon={
+                            <Box
+                              sx={{
+                                width: 20,
+                                height: 20,
+                                border: "2px solid #cfcfcf",
+                                borderRadius: "6px",
+                              }}
+                            />
                           }
-                        >
-                          <Checkbox
-                            checked={task.completed}
-                            onChange={() => toggleComplete(task.id)}
-                            icon={
-                              <Box
+                          checkedIcon={
+                            <CheckIcon
+                              sx={{
+                                backgroundColor: "#212121",
+                                color: "#ffffff",
+                                borderRadius: "6px",
+                                fontSize: 20,
+                                p: "2px",
+                              }}
+                            />
+                          }
+                          sx={{ mr: 2 }}
+                          disabled={
+                            !task.collaborators.some(
+                              (c) => c.user_id === userId
+                            ) && task.user_id !== userId
+                          }
+                        />
+                        <ListItemText
+                          primary={
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Typography
                                 sx={{
-                                  width: 20,
-                                  height: 20,
-                                  border: "2px solid #cfcfcf",
-                                  borderRadius: "6px",
+                                  textDecoration: task.userCompleted
+                                    ? "line-through"
+                                    : "none",
+                                  color: task.userCompleted
+                                    ? "#9e9e9e"
+                                    : "inherit",
                                 }}
-                              />
-                            }
-                            checkedIcon={
-                              <CheckIcon
-                                sx={{
-                                  backgroundColor: "#212121",
-                                  color: "#ffffff",
-                                  borderRadius: "6px",
-                                  fontSize: 20,
-                                  p: "2px",
-                                }}
-                              />
-                            }
-                            sx={{ mr: 2 }}
-                          />
-                          <ListItemText
-                            primary={
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Typography
+                              >
+                                {task.title}
+                              </Typography>
+                              {task.priority && (
+                                <Box
                                   sx={{
-                                    textDecoration: task.completed
-                                      ? "line-through"
-                                      : "none",
-                                    color: task.completed
-                                      ? "#9e9e9e"
-                                      : "inherit",
+                                    width: 12,
+                                    height: 12,
+                                    borderRadius: "50%",
+                                    backgroundColor:
+                                      task.priority.priority_color,
                                   }}
+                                />
+                              )}
+                            </Box>
+                          }
+                          secondary={
+                            <Box>
+                              {task.dueDateTime && (
+                                <Box
+                                  display="flex"
+                                  alignItems="center"
+                                  gap={0.5}
+                                  mt={0.5}
                                 >
-                                  {task.title}
-                                </Typography>
-                                {task.priority && (
-                                  <Box
-                                    sx={{
-                                      width: 12,
-                                      height: 12,
-                                      borderRadius: "50%",
-                                      backgroundColor:
-                                        task.priority.priority_color,
-                                    }}
+                                  <CalendarIcon
+                                    fontSize="small"
+                                    sx={{ fontSize: 16 }}
                                   />
-                                )}
-                              </Box>
-                            }
-                            secondary={
-                              <Box>
-                                {task.dueDateTime && (
-                                  <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    gap={0.5}
-                                    mt={0.5}
+                                  <Typography
+                                    variant="body2"
+                                    component="span"
                                   >
-                                    <CalendarIcon
-                                      fontSize="small"
-                                      sx={{ fontSize: 16 }}
-                                    />
-                                    <Typography
-                                      variant="body2"
-                                      component="span"
-                                    >
-                                      {dayjs(task.dueDateTime).format(
-                                        "YYYY-MM-DD HH:mm"
-                                      )}
-                                    </Typography>
-                                  </Box>
-                                )}
-                                {task.recurrence && (
-                                  <Typography variant="body2" mt={0.5}>
-                                    Recurs: {task.recurrence.recur_name}
-                                  </Typography>
-                                )}
-                                {task.collaborators?.length > 0 && (
-                                  <Box mt={1}>
-                                    <Typography
-                                      variant="body2"
-                                      sx={{ mb: 0.5 }}
-                                    >
-                                      Collaborators ({task.collaborators.length}
-                                      ):
-                                    </Typography>
-                                    <Box display="flex" flexWrap="wrap" gap={1}>
-                                      {task.collaborators.map(
-                                        (collaborator) => (
-                                          <Box
-                                            key={collaborator.user_id}
-                                            display="flex"
-                                            alignItems="center"
-                                            gap={0.5}
-                                            sx={{
-                                              p: 0.5,
-                                              borderRadius: 1,
-                                              backgroundColor:
-                                                collaborator.status ===
-                                                "Completed"
-                                                  ? "rgba(76, 175, 80, 0.2)"
-                                                  : "transparent",
-                                            }}
-                                          >
-                                            <Box
-                                              sx={{
-                                                width: 8,
-                                                height: 8,
-                                                borderRadius: "50%",
-                                                backgroundColor:
-                                                  collaborator.status ===
-                                                  "Completed"
-                                                    ? "success.main"
-                                                    : "grey.500",
-                                              }}
-                                            />
-                                            <Typography variant="body2">
-                                              {collaborator.tbl_user
-                                                ?.user_name || "Unknown"}
-                                              {collaborator.user_id ===
-                                                userId && " (You)"}
-                                            </Typography>
-                                          </Box>
-                                        )
-                                      )}
-                                    </Box>
-                                    {completedCollaborators.length > 0 && (
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ mt: 1, color: "success.main" }}
-                                      >
-                                        {completedCollaborators.length} of{" "}
-                                        {task.collaborators.length}{" "}
-                                        collaborators completed
-                                      </Typography>
+                                    {dayjs(task.dueDateTime).format(
+                                      "YYYY-MM-DD HH:mm"
                                     )}
+                                  </Typography>
+                                </Box>
+                              )}
+                              {task.recurrence && (
+                                <Typography variant="body2" mt={0.5}>
+                                  Recurs: {task.recurrence.recur_name}
+                                </Typography>
+                              )}
+                              {task.collaborators?.length > 0 && (
+                                <Box mt={1}>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ mb: 0.5 }}
+                                  >
+                                    Collaborators ({task.collaborators.length}):
+                                  </Typography>
+                                  <Box display="flex" flexWrap="wrap" gap={1}>
+                                    {task.collaborators.map((collaborator) => (
+                                      <Box
+                                        key={collaborator.user_id}
+                                        display="flex"
+                                        alignItems="center"
+                                        gap={0.5}
+                                        sx={{
+                                          p: 0.5,
+                                          borderRadius: 1,
+                                          backgroundColor:
+                                            collaborator.status === "Completed"
+                                              ? "rgba(76, 175, 80, 0.2)"
+                                              : "transparent",
+                                        }}
+                                      >
+                                        <Box
+                                          sx={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: "50%",
+                                            backgroundColor:
+                                              collaborator.status === "Completed"
+                                                ? "success.main"
+                                                : collaborator.status ===
+                                                  "Invited"
+                                                ? "warning.main"
+                                                : collaborator.status ===
+                                                  "Declined"
+                                                ? "error.main"
+                                                : "grey.500",
+                                          }}
+                                        />
+                                        <Typography variant="body2">
+                                          {collaborator.tbl_user?.user_name ||
+                                            "Unknown"}
+                                          {collaborator.user_id === userId &&
+                                            " (You)"}
+                                        </Typography>
+                                      </Box>
+                                    ))}
                                   </Box>
-                                )}
-                                {task.collaborators?.some(
-                                  (c) =>
-                                    c.user_id === userId &&
-                                    c.status === "Invited"
-                                ) && (
-                                  <Box display="flex" gap={1} mt={1}>
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      onClick={() =>
-                                        handleAcceptCollaboration(task.id)
-                                      }
+                                  {task.completedCollaborators > 0 && (
+                                    <Typography
+                                      variant="body2"
+                                      sx={{ mt: 1, color: "success.main" }}
                                     >
-                                      Accept
-                                    </Button>
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      color="error"
-                                      onClick={() =>
-                                        handleDeclineCollaboration(task.id)
-                                      }
-                                    >
-                                      Decline
-                                    </Button>
-                                  </Box>
-                                )}
-                              </Box>
-                            }
-                          />
-                        </ListItem>
-                        <Divider component="li" />
-                      </motion.div>
-                    );
-                  })}
+                                      {task.completedCollaborators} of{" "}
+                                      {task.collaborators.length} collaborators
+                                      completed
+                                    </Typography>
+                                  )}
+                                </Box>
+                              )}
+                              {task.collaborators?.some(
+                                (c) =>
+                                  c.user_id === userId && c.status === "Invited"
+                              ) && (
+                                <Box display="flex" gap={1} mt={1}>
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() =>
+                                      handleAcceptCollaboration(task.id)
+                                    }
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="error"
+                                    onClick={() =>
+                                      handleDeclineCollaboration(task.id)
+                                    }
+                                  >
+                                    Decline
+                                  </Button>
+                                </Box>
+                              )}
+                            </Box>
+                          }
+                        />
+                      </ListItem>
+                      <Divider component="li" />
+                    </motion.div>
+                  ))}
                 </AnimatePresence>
                 {tasks.length === 0 && (
                   <Typography
@@ -1028,6 +1069,10 @@ const MinimalTaskPage = () => {
             <GroupAddIcon sx={{ mr: 2, fontSize: 20 }} />
             Add Collaborators
           </MenuItem>
+          <MenuItem onClick={handleOpenCollaboratorsViewModal}>
+            <VisibilityIcon sx={{ mr: 2, fontSize: 20 }} />
+            View Collaborators
+          </MenuItem>
           <Divider />
           <MenuItem
             onClick={() => {
@@ -1053,13 +1098,10 @@ const MinimalTaskPage = () => {
           </DialogTitle>
           <DialogContent>
             <Stack spacing={3} sx={{ mt: 1 }}>
-              <DatePicker
+              <DateTimePicker
                 label="Due Date & Time"
                 value={reminderDateTime}
                 onChange={(newValue) => setReminderDateTime(newValue)}
-                slots={{
-                  openPickerIcon: CalendarIcon,
-                }}
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -1275,6 +1317,9 @@ const MinimalTaskPage = () => {
                 );
               })}
             </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {collaborators.length}/{MAX_COLLABORATORS} collaborators selected
+            </Typography>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
             <Button onClick={() => setOpenCollabModal(false)} color="inherit">
@@ -1289,6 +1334,45 @@ const MinimalTaskPage = () => {
               whileTap={{ scale: 0.95 }}
             >
               Save Collaborators
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Collaborators View Dialog */}
+        <Dialog
+          open={openCollaboratorsViewModal}
+          onClose={() => setOpenCollaboratorsViewModal(false)}
+          PaperProps={{
+            sx: { borderRadius: "16px", width: "100%", maxWidth: "400px" },
+          }}
+        >
+          <DialogTitle>
+            Collaborators for "{currentTask?.title || "Task"}"
+          </DialogTitle>
+          <DialogContent>
+            {currentTask?.collaborators?.length > 0 ? (
+              <List dense>
+                {currentTask.collaborators.map((collaborator) => (
+                  <ListItem key={collaborator.user_id}>
+                    <ListItemText
+                      primary={collaborator.tbl_user?.user_name || "Unknown"}
+                      secondary={`Status: ${collaborator.status}`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No collaborators assigned
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button
+              onClick={() => setOpenCollaboratorsViewModal(false)}
+              color="inherit"
+            >
+              Close
             </Button>
           </DialogActions>
         </Dialog>

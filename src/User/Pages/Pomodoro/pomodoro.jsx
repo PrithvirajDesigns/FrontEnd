@@ -32,6 +32,9 @@ import {
   ExpandLess,
   Fullscreen,
   FullscreenExit,
+  SkipNext,
+  SkipPrevious,
+  VolumeDown,
 } from "@mui/icons-material";
 import { motion } from "framer-motion";
 import supabase from "../../../utils/supabase";
@@ -98,7 +101,7 @@ const INITIAL_STATS = {
   currentStreak: 0,
 };
 
-// TimerCircle component (unchanged)
+// TimerCircle component
 const TimerCircle = ({
   timeLeft,
   totalTime,
@@ -145,18 +148,23 @@ const TimerCircle = ({
         width="100%"
         height="100%"
         viewBox={`0 0 ${size} ${size}`}
-        animate={
-          isActive
-            ? {
-                scale: [1, 1.03, 1],
-                transition: {
-                  repeat: Infinity,
-                  duration: 2,
-                  ease: "easeInOut",
-                },
-              }
-            : {}
-        }
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ 
+          scale: 1, 
+          opacity: 1,
+          ...(isActive ? {
+            scale: [1, 1.03, 1],
+          } : {})
+        }}
+        transition={{ 
+          duration: 0.8, 
+          delay: 0.2,
+          ...(isActive ? {
+            repeat: Infinity,
+            duration: 2,
+            ease: "easeInOut",
+          } : {})
+        }}
       >
         <circle
           cx={size / 2}
@@ -223,7 +231,7 @@ const TimerCircle = ({
   );
 };
 
-// FullscreenTimerView component (unchanged)
+// FullscreenTimerView component
 const FullscreenTimerView = ({ timerState, onClose, toggleTimer, toggleMute }) => {
   const { timeLeft, totalTime, currentPhase, isActive, isMuted } = timerState;
 
@@ -243,20 +251,19 @@ const FullscreenTimerView = ({ timerState, onClose, toggleTimer, toggleMute }) =
         zIndex: 9999,
       }}
     >
-      <IconButton
-        onClick={toggleMute}
-        sx={{
-          position: "absolute",
-          top: 16,
-          right: 16,
-          border: "1px solid #e0e0e0",
-          borderRadius: "12px",
-          padding: "8px",
-          backgroundColor: "rgba(255, 255, 255, 0.8)",
-        }}
-      >
-        {isMuted ? <VolumeOff /> : <VolumeUp />}
-      </IconButton>
+      <Box sx={{ position: "absolute", top: 16, right: 16 }}>
+        <IconButton
+          onClick={toggleMute}
+          sx={{
+            border: "1px solid #e0e0e0",
+            borderRadius: "12px",
+            padding: "8px",
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+          }}
+        >
+          {isMuted ? <VolumeOff /> : <VolumeUp />}
+        </IconButton>
+      </Box>
       <TimerCircle
         timeLeft={timeLeft}
         totalTime={totalTime}
@@ -297,10 +304,107 @@ const FullscreenTimerView = ({ timerState, onClose, toggleTimer, toggleMute }) =
   );
 };
 
+// MusicPlayer component
+const MusicPlayer = ({
+  songs,
+  currentSongIndex,
+  setCurrentSongIndex,
+  isMusicPlaying,
+  setIsMusicPlaying,
+  isMuted,
+  backgroundAudio,
+  volume,
+  setVolume,
+}) => {
+  const currentSong = songs[currentSongIndex];
+
+  const togglePlay = () => {
+    setIsMusicPlaying(!isMusicPlaying);
+  };
+
+  const playNext = () => {
+    setCurrentSongIndex((prev) => (prev + 1) % songs.length);
+    setIsMusicPlaying(true);
+  };
+
+  const playPrevious = () => {
+    setCurrentSongIndex((prev) => (prev - 1 + songs.length) % songs.length);
+    setIsMusicPlaying(true);
+  };
+
+  const handleVolumeChange = (event, newValue) => {
+    setVolume(newValue / 100);
+    if (backgroundAudio) {
+      backgroundAudio.volume = newValue / 100;
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.4 }}
+    >
+      <Paper elevation={2} sx={{ p: 3, width: "100%", mb: 3 }}>
+        <Typography
+          variant="body1"
+          sx={{ mb: 2, fontWeight: "medium", textAlign: "center" }}
+        >
+          {currentSong.name}
+        </Typography>
+        <Box sx={{ display: "flex", justifyContent: "center", gap: 1, mb: 2 }}>
+          <IconButton onClick={playPrevious} disabled={songs.length <= 1}>
+            <SkipPrevious />
+          </IconButton>
+          <IconButton onClick={togglePlay}>
+            {isMusicPlaying && !isMuted ? <Pause /> : <PlayArrow />}
+          </IconButton>
+          <IconButton onClick={playNext} disabled={songs.length <= 1}>
+            <SkipNext />
+          </IconButton>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <VolumeDown />
+          <Slider
+            value={volume * 100}
+            onChange={handleVolumeChange}
+            min={0}
+            max={100}
+            sx={{ width: "100%" }}
+          />
+          <VolumeUp />
+        </Box>
+      </Paper>
+    </motion.div>
+  );
+};
+
 // Main PomodoroTimer component
 const PomodoroTimer = () => {
   const [bellSound] = useState(new Audio("/Achievement_bell.wav"));
   const [breakSound] = useState(new Audio("/Short_break.wav"));
+  const [songs] = useState([
+    { name: "as the light fades", src: "/public/as the light fades.mp3" },
+    { name: "Carousel", src: "/public/Carousel.mp3" },
+    { name: "Cotton Cloud", src: "/public/Cotton Cloud.mp3" },
+    { name: "Down the Line", src: "/public/Down the Line.mp3" },
+    { name: "Everything (You Are)", src: "/public/Everything (You Are).mp3" },
+    { name: "Lonely", src: "/public/Lonely.mp3" },
+    { name: "Lunar Drive", src: "/public/Lunar Drive.mp3" },
+    { name: "Moonlight", src: "/public/Moonlight.mp3" },
+    { name: "Nautilus", src: "/public/Nautilus.mp3" },
+    { name: "Snowman", src: "/public/Snowman.mp3" },
+    { name: "Someday", src: "/public/Someday.mp3" },
+    { name: "Spanish Castle", src: "/public/Spanish Castle.mp3" },
+    { name: "The Places We Used to Walk", src: "/public/The Places We Used to Walk.mp3" },
+    { name: "To Be Continued", src: "/public/To Be Continued.mp3" },
+    { name: "To The Euphrates", src: "/public/To The Euphrates.mp3" },
+    { name: "Vhs", src: "/public/Vhs.mp3" },
+  ]);
+  const [currentSongIndex, setCurrentSongIndex] = useState(0);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [backgroundAudio, setBackgroundAudio] = useState(null);
+  const [volume, setVolume] = useState(0.5);
   const [settings, setSettings] = useState(DEFAULT_TIMER_SETTINGS);
   const [tempSettings, setTempSettings] = useState(DEFAULT_TIMER_SETTINGS);
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIMER_SETTINGS.work * 60);
@@ -323,6 +427,52 @@ const PomodoroTimer = () => {
   });
 
   const userId = sessionStorage.getItem("uid");
+
+  // Background audio initialization
+  useEffect(() => {
+    const audio = new Audio(songs[currentSongIndex].src);
+    audio.loop = false; // Disable loop to allow 'ended' event
+    audio.volume = volume;
+    setBackgroundAudio(audio);
+
+    // Handle song end
+    const handleSongEnd = () => {
+      setCurrentSongIndex((prev) => (prev + 1) % songs.length);
+      setIsMusicPlaying(true);
+    };
+    audio.addEventListener("ended", handleSongEnd);
+
+    if (isMusicPlaying && !isMuted && isActive) {
+      audio.play().catch((e) => console.log("Audio play failed:", e));
+    }
+
+    return () => {
+      audio.removeEventListener("ended", handleSongEnd);
+      audio.pause();
+      setBackgroundAudio(null);
+    };
+  }, [currentSongIndex, songs]);
+
+  // Control background audio playback
+  useEffect(() => {
+    if (backgroundAudio) {
+      if (isMusicPlaying && !isMuted && isActive) {
+        backgroundAudio.play().catch((e) => console.log("Audio play failed:", e));
+      } else {
+        backgroundAudio.pause();
+      }
+    }
+  }, [isMusicPlaying, isMuted, isActive, backgroundAudio]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (backgroundAudio) {
+        backgroundAudio.pause();
+        setBackgroundAudio(null);
+      }
+    };
+  }, []);
 
   // Fetch user data
   const fetchUserData = async () => {
@@ -537,6 +687,20 @@ const PomodoroTimer = () => {
     }
   };
 
+  // Toggle mute
+  const toggleMuteSound = () => {
+    setIsMuted((prev) => {
+      if (backgroundAudio) {
+        if (!prev) {
+          backgroundAudio.pause();
+        } else if (isMusicPlaying && isActive) {
+          backgroundAudio.play().catch((e) => console.log("Audio play failed:", e));
+        }
+      }
+      return !prev;
+    });
+  };
+
   // Toggle fullscreen
   const toggleFullscreenMode = () => {
     if (!isFullscreen) {
@@ -658,8 +822,6 @@ const PomodoroTimer = () => {
     switchToPhase(TIMER_PHASES.WORK);
   };
 
-  const toggleMuteSound = () => setIsMuted(!isMuted);
-
   // Settings dialog
   const openSettingsDialog = () => {
     setTempSettings(settings);
@@ -735,7 +897,11 @@ const PomodoroTimer = () => {
         maxWidth="md"
         sx={{ py: 4, display: isFullscreen ? "none" : "block" }}
       >
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
           {/* Header with user photo */}
           <Box
             sx={{
@@ -748,18 +914,6 @@ const PomodoroTimer = () => {
             }}
           >
             <Box sx={{ display: "flex", alignItems: "center" }}>
-              <Avatar
-                alt={userName || "User"}
-                src={userPhoto}
-                sx={{
-                  width: 40,
-                  height: 40,
-                  mr: 2,
-                  bgcolor: userPhoto ? "transparent" : "#212121",
-                }}
-              >
-                {!userPhoto && getInitials(userName)}
-              </Avatar>
               <Typography variant="h1">Pomodoro Timer</Typography>
             </Box>
             <Box>
@@ -845,143 +999,168 @@ const PomodoroTimer = () => {
             </Paper>
 
             <Box sx={{ width: 300 }}>
-              <Paper elevation={2} sx={{ p: 3, width: "100%", mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
-                  Pomodoro Technique
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  1. Work for <strong>{settings.work}</strong> minutes
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  2. Take a <strong>{settings.shortBreak}</strong>-minute short
-                  break
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  3. After <strong>{settings.pomodorosBeforeLongBreak}</strong>{" "}
-                  work sessions, take a <strong>{settings.longBreak}</strong>
-                  -minute long break
-                </Typography>
-                <Typography variant="body2">
-                  4. Repeat and stay productive!
-                </Typography>
-              </Paper>
-              <Paper elevation={2} sx={{ p: 3, width: "100%" }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                  }}
-                  onClick={toggleStatsPanel}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <BarChart sx={{ mr: 1 }} />
-                    <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                      Stats
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    edge="end"
-                    onClick={toggleStatsPanel}
-                    sx={{ mr: -1 }}
-                  >
-                    {statsExpanded ? <ExpandLess /> : <ExpandMore />}
-                  </IconButton>
-                </Box>
-                <Box sx={{ mt: 2, mb: statsExpanded ? 0 : 0 }}>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-                  >
-                    <Typography variant="body2">Today:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {stats.todayPomodorosCompleted} pomodoros ||{" "}
-                      {formatStatsTime(stats.todayWorkTime)}
-                    </Typography>
-                  </Box>
+              <MusicPlayer
+                songs={songs}
+                currentSongIndex={currentSongIndex}
+                setCurrentSongIndex={setCurrentSongIndex}
+                isMusicPlaying={isMusicPlaying}
+                setIsMusicPlaying={setIsMusicPlaying}
+                isMuted={isMuted}
+                backgroundAudio={backgroundAudio}
+                volume={volume}
+                setVolume={setVolume}
+              />
+              
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.6 }}
+              >
+                <Paper elevation={2} sx={{ p: 3, width: "100%", mb: 3 }}>
+                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                    Pomodoro Technique
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    1. Work for <strong>{settings.work}</strong> minutes
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    2. Take a <strong>{settings.shortBreak}</strong>-minute short
+                    break
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    3. After <strong>{settings.pomodorosBeforeLongBreak}</strong>{" "}
+                    work sessions, take a <strong>{settings.longBreak}</strong>
+                    -minute long break
+                  </Typography>
+                  <Typography variant="body2">
+                    4. Repeat and stay productive!
+                  </Typography>
+                </Paper>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.8 }}
+              >
+                <Paper elevation={2} sx={{ p: 3, width: "100%" }}>
                   <Box
                     sx={{
-                      bgcolor: "rgba(33, 33, 33, 0.05)",
-                      p: 1.5,
-                      borderRadius: 2,
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
+                      cursor: "pointer",
                     }}
+                    onClick={toggleStatsPanel}
                   >
-                    <Typography variant="body2">Current streak:</Typography>
-                    <Typography variant="body1" fontWeight="bold">
-                      {stats.currentStreak}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      <BarChart sx={{ mr: 1 }} />
+                      <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+                        Stats
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      size="small"
+                      edge="end"
+                      onClick={toggleStatsPanel}
+                      sx={{ mr: -1 }}
+                    >
+                      {statsExpanded ? <ExpandLess /> : <ExpandMore />}
+                    </IconButton>
                   </Box>
-                </Box>
-                <Collapse in={statsExpanded} timeout="auto" unmountOnExit>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ color: "text.secondary", mb: 1 }}
-                  >
-                    Daily Details
-                  </Typography>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-                  >
-                    <Typography variant="body2">Focus time:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {formatStatsTime(stats.todayWorkTime)}
-                    </Typography>
+                  <Box sx={{ mt: 2, mb: statsExpanded ? 0 : 0 }}>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+                    >
+                      <Typography variant="body2">Today:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {stats.todayPomodorosCompleted} pomodoros ||{" "}
+                        {formatStatsTime(stats.todayWorkTime)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        bgcolor: "rgba(33, 33, 33, 0.05)",
+                        p: 1.5,
+                        borderRadius: 2,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Typography variant="body2">Current streak:</Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {stats.currentStreak}
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
-                  >
-                    <Typography variant="body2">Break time:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {formatStatsTime(stats.todayBreakTime)}
+                  <Collapse in={statsExpanded} timeout="auto" unmountOnExit>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ color: "text.secondary", mb: 1 }}
+                    >
+                      Daily Details
                     </Typography>
-                  </Box>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ color: "text.secondary", mb: 1 }}
-                  >
-                    All Time
-                  </Typography>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-                  >
-                    <Typography variant="body2">Total pomodoros:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {stats.totalPomodorosCompleted} ||{" "}
-                      {formatStatsTime(stats.totalWorkTime)}
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+                    >
+                      <Typography variant="body2">Focus time:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatStatsTime(stats.todayWorkTime)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
+                    >
+                      <Typography variant="body2">Break time:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatStatsTime(stats.todayBreakTime)}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ color: "text.secondary", mb: 1 }}
+                    >
+                      All Time
                     </Typography>
-                  </Box>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-                  >
-                    <Typography variant="body2">Total focus time:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {formatStatsTime(stats.totalWorkTime)}
-                    </Typography>
-                  </Box>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
-                  >
-                    <Typography variant="body2">Longest streak:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {stats.longestStreak} pomodoros
-                    </Typography>
-                  </Box>
-                  <Button
-                    variant="text"
-                    color="primary"
-                    size="small"
-                    onClick={resetAllStats}
-                    sx={{ mt: 1 }}
-                  >
-                    Reset All Stats
-                  </Button>
-                </Collapse>
-              </Paper>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+                    >
+                      <Typography variant="body2">Total pomodoros:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {stats.totalPomodorosCompleted} ||{" "}
+                        {formatStatsTime(stats.totalWorkTime)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+                    >
+                      <Typography variant="body2">Total focus time:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatStatsTime(stats.totalWorkTime)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
+                    >
+                      <Typography variant="body2">Longest streak:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {stats.longestStreak} pomodoros
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="text"
+                      color="primary"
+                      size="small"
+                      onClick={resetAllStats}
+                      sx={{ mt: 1 }}
+                    >
+                      Reset All Stats
+                    </Button>
+                  </Collapse>
+                </Paper>
+              </motion.div>
             </Box>
           </Box>
 

@@ -43,27 +43,7 @@ const Sidebar = () => {
             </ListItem>
           </Link>
 
-          <Link to={"/admin/adminreg"} className={Style.linktext}>
-            {" "}
-            <ListItem
-              className={Style.ListItem}
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                flexDirection: "column-reverse",
-              }}
-            >
-              <Typography variant="body1" sx={{ color: "rgb(47, 73, 104)" }}>
-                Add Admin
-              </Typography>
-              <ListItemIcon>
-                <PersonAddAlt1Icon
-                  sx={{ color: "rgb(47, 73, 104)", width: 40, height: 40 }}
-                />
-              </ListItemIcon>
-            </ListItem>
-          </Link>
+          
 
           <Link to={"/admin/bookadd"} className={Style.linktext}>
             {" "}

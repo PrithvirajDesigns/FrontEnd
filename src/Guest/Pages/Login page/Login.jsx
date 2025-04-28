@@ -110,7 +110,7 @@ const Login = () => {
       setFadeOut(true);
       setTimeout(() => {
         const isAdmin = sessionStorage.getItem("aid") !== null;
-        navigate(isAdmin ? "/admin" : "/user/");
+        navigate(isAdmin ? "/admin/status/" : "/user/");
       }, 500);
     }
   };

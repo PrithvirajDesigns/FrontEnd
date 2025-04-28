@@ -35,15 +35,7 @@ const Navbar = () => {
   return (
     <div className={Style.navm}>
       <div className={Style.navbarcon}>
-        <NotificationsActiveRoundedIcon
-          className={Style.bellicon}
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingTop: "6px",
-          }}
-        />
+        
         <Button
           onClick={handleClick}
           sx={{ padding: 0, minWidth: "auto" }}
